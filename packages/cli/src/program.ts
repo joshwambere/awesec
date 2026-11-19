@@ -7,8 +7,7 @@ import { runDoctor } from "./commands/doctor";
 import { EXIT, type ExitCode } from "./exit-codes";
 import type { Io } from "./io";
 import { createReporter, type Reporter, ReporterNameSchema } from "./reporters";
-
-export const VERSION: string = pkg.version;
+import { VERSION_STRING } from "./version";
 
 export interface Deps {
   io: Io;
@@ -37,7 +36,7 @@ export async function run(argv: readonly string[], deps: Deps): Promise<ExitCode
   const program = new Command()
     .name("awesec")
     .description(pkg.description)
-    .version(VERSION, "-V, --version", "print the awesec version")
+    .version(VERSION_STRING, "-V, --version", "print the awesec version and build")
     .addOption(
       new Option("--reporter <name>", "output format")
         .choices(ReporterNameSchema.options)
