@@ -2,7 +2,9 @@
 
 # Base image pinned by tag *and* digest. Bump both together.
 # Runtime floor is Node 22.14 (package.json engines); the image tracks the latest 22.x patch.
-ARG NODE_IMAGE=node:22.23.5-trixie-slim@sha256:68c76cfad89921b927eae28ba21407475e29d0ce450afcdbe70c1532db042b64
+# Alpine is enough: the runtime is one bundled .mjs with no native modules or OS tooling.
+# Revisit if a later milestone shells out to generators that need glibc, git, a JRE, etc.
+ARG NODE_IMAGE=node:22.23.5-alpine3.24@sha256:1314fb30ec37592d5845e5a160d522c0e680972aa534549940b8d73bde88481a
 
 # ---- build: install with the lockfile, bundle to a single file ----
 FROM ${NODE_IMAGE} AS build
