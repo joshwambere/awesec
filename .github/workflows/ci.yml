@@ -1,0 +1,52 @@
+name: ci
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: lint, typecheck, test, build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4 # version comes from package.json "packageManager"
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .node-version # 22.14.0, the supported floor
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm build
+      - name: smoke test bundle
+        run: |
+          node packages/cli/dist/awesec.mjs --version
+          node packages/cli/dist/awesec.mjs doctor --json
+
+  image:
+    name: docker image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          load: true
+          tags: awesec:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: smoke test image
+        run: |
+          docker run --rm awesec:ci --version
+          docker run --rm awesec:ci doctor --json
+          test "$(docker run --rm --entrypoint id awesec:ci -u)" != "0"
