@@ -1,0 +1,6 @@
+paths:
+  .github/workflows/publish-edge.yml:
+    ignore:
+      # "Create multi-arch manifest" deliberately word-splits the `-t <tag>` list and
+      # the digest list into separate arguments; quoting them would break the command.
+      - "SC2046:"

@@ -13,6 +13,10 @@ export default defineConfig({
   splitting: false,
   clean: true,
   dts: false,
+  define: {
+    __AWESEC_BUILD_SHA__: JSON.stringify(process.env.AWESEC_BUILD_SHA ?? "dev"),
+    __AWESEC_CHANNEL__: JSON.stringify(process.env.AWESEC_CHANNEL ?? "dev"),
+  },
   banner: {
     // commander is CommonJS; give its bundled require() calls a real require.
     js: [

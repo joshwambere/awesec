@@ -15,9 +15,11 @@ jobs:
     name: lint, typecheck, test, build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
-      - uses: pnpm/action-setup@v4 # version comes from package.json "packageManager"
-      - uses: actions/setup-node@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1 (version from package.json "packageManager")
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .node-version # 22.14.0, the supported floor
           cache: pnpm
@@ -31,22 +33,62 @@ jobs:
           node packages/cli/dist/awesec.mjs --version
           node packages/cli/dist/awesec.mjs doctor --json
 
-  image:
-    name: docker image
-    runs-on: ubuntu-latest
+  # Same matrix, Dockerfile and build args as publish-edge, without pushing.
+  # Reads the per-platform cache main writes; never writes it (PRs must not seed main's cache).
+  image-build-check:
+    name: image build check (${{ matrix.platform }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/amd64
+            runner: ubuntu-24.04
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v5
-      - uses: docker/setup-buildx-action@v3
-      - uses: docker/build-push-action@v6
+      - name: Prepare
+        env:
+          PLATFORM: ${{ matrix.platform }}
+        run: echo "PLATFORM_PAIR=${PLATFORM//\//-}" >> "$GITHUB_ENV"
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Load pinned tool versions
+        run: grep -E '^[A-Z_]+=[^[:space:]]+$' docker/versions.env >> "$GITHUB_ENV"
+
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
+          file: Dockerfile
+          platforms: ${{ matrix.platform }}
+          build-args: |
+            CDXGEN_VERSION=${{ env.CDXGEN_VERSION }}
+            AWESEC_BUILD_SHA=${{ github.sha }}
+            AWESEC_CHANNEL=pr
           push: false
           load: true
-          tags: awesec:ci
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-      - name: smoke test image
+          tags: awesec:pr
+          provenance: false
+          sbom: false
+          cache-from: type=gha,scope=${{ env.PLATFORM_PAIR }}
+
+      - name: Smoke test image
         run: |
-          docker run --rm awesec:ci --version
-          docker run --rm awesec:ci doctor --json
-          test "$(docker run --rm --entrypoint id awesec:ci -u)" != "0"
+          set -euo pipefail
+          out=$(docker run --rm awesec:pr --version)
+          echo "awesec --version -> $out"
+          grep -q "${GITHUB_SHA::7}" <<< "$out"
+
+          uid=$(docker run --rm --entrypoint id awesec:pr -u)
+          test "$uid" = "10001"
+
+          docker run --rm --entrypoint cdxgen awesec:pr --version
+          docker run --rm --entrypoint syft awesec:pr version
